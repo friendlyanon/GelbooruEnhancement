@@ -38,9 +38,10 @@
 "use strict";
 
 /**
- * DEBUG THUBMNAIL POSITIONS
+ * DEBUG
  */
 const WIREFRAME = 0; // 0 - off, 1 - on during image viewer, 2 - always on
+const SAFE_DEBUG = false;
 
 /**
  * BASIC CONSTANTS
@@ -357,7 +358,10 @@ $.extend($, {
         while(++i < k) args[++p] = arguments[i];
       }
       try { return fn.apply(context, args); }
-      catch(e) { return safeError; }
+      catch(e) {
+        if (SAFE_DEBUG) console.error("$.safe debug:", e);
+        return safeError;
+      }
     }
     safe.error = safeError;
     return safe;
@@ -830,10 +834,10 @@ Hover = {
     img.parentNode.setAttribute("class", "current");
   },
   kinetic() {
-    let view = Hover.wrap, pressed = false,
-      offset, reference, velocity, frame, timestamp, ticker, amplitude, target,
+    const view = Hover.wrap,
       rm = () => Hover.el.classList.remove("showimagelist"),
       unset = () => Hover.el.classList.add("showimagelist");
+    let offset, reference, velocity, frame, timestamp, ticker, amplitude, target, pressed = false;
     function scroll(x) {
       const max = view.scrollLeftMax;
       offset = x > max ? max : x < 0 ? 0 : x;
@@ -867,7 +871,7 @@ Hover = {
         }
       }
     }
-    function tap(e) {
+    $.on(view, 'mousedown', function tap(e) {
       Hover.prevent = !(pressed = true);
       unset();
       clearInterval(ticker);
@@ -878,8 +882,8 @@ Hover = {
       frame = offset;
       timestamp = Date.now();
       ticker = setInterval(track, 100 / 3);
-    }
-    function drag(e) {
+    }, passive);
+    $.on(d.body, 'mousemove', function drag(e) {
       if (pressed) {
         const x = e.clientX, delta = reference - x;
         if (delta > 1 || delta < -1) {
@@ -888,8 +892,8 @@ Hover = {
           scroll(offset + delta);
         }
       }
-    }
-    function release() {
+    }, passive);
+    $.on(d.body, 'mouseup', function release() {
       pressed = false;
       clearInterval(ticker);
       if (velocity > 10 || velocity < -10) {
@@ -899,10 +903,7 @@ Hover = {
         Hover.kinetID = requestAnimationFrame(autoScroll);
       }
       else rm();
-    }
-    $.on(view, 'mousedown', tap, passive);
-    $.on(d.body, 'mousemove', drag, passive);
-    $.on(d.body, 'mouseup', release, passive);
+    }, passive);
   },
   cancel() {
     $.safe(cancelAnimationFrame, $.u, Hover.kinetID);
@@ -931,6 +932,26 @@ Main = {
      case "progfail": case "progdone":
       Prog.el = $.rm(e.target);
     }
+  },
+  finalizeCss() {
+    const style = $.extend($.c("style"), { type: "text/css" });
+    $.add(new Text(Main.css), style);
+    Object.defineProperty(Main, "css", {
+      get() {
+        return style.textContent;
+      },
+      set(moreCss) {
+        moreCss = new Text(style.textContent + moreCss);
+        {
+          const arr = style.childNodes;
+          let i = arr.length;
+          while(~--i) $.rm(arr[i]);
+        }
+        style.appendChild(moreCss);
+        return style.textContent;
+      }
+    });
+    $.add(style, d.documentElement);
   },
   async initDomainInfo() {
     switch(site.name) {
@@ -975,24 +996,7 @@ Main = {
      case "safebooru":
       Main.css += "img[title*=' rating:'][src*='.png'] {\n  background-color: rgba(255,255,255,.5)\n}";
     }
-    const style = $.extend($.c("style"), { type: "text/css" });
-    $.add(new Text(Main.css), style);
-    Object.defineProperty(Main, "css", {
-      get() {
-        return style.textContent;
-      },
-      set(moreCss) {
-        moreCss = new Text(style.textContent + moreCss);
-        {
-          const arr = style.childNodes;
-          let i = arr.length;
-          while(~--i) $.rm(arr[i]);
-        }
-        style.appendChild(moreCss);
-        return style.textContent;
-      }
-    });
-    $.add(style, d.documentElement);
+    Main.finalizeCss();
   },
   click(e) {
     if (e.button === 0) {
@@ -1164,14 +1168,15 @@ Main = {
       }
       w.scrollTo(0, a.offsetTop + correction + a.offsetHeight / 2 - w.innerHeight / 2);
       a.focus();
-      Pos.fn(); Btn.fn();
+      Btn.fn(); Pos.fn();
     }
     if (site.sankakucomplex) uW.Sankaku.Pagination.auto_enabled = true;
     for (let i = 0, arr = [[Main, "gif"], [Prog], [Menu], [$.keyDown], [Hover, "gears"]]; i < 5; ++i) {
-      const [nS, el = "el"] = arr[i];
-      nS[el] = $.rm(nS[el]);
+      const [p, el = "el"] = arr[i];
+      p[el] = $.rm(p[el]);
     }
   },
+  _on: e => e.button === 1 && $.keyDown({ keyCode: 38, event: e }),
   on(a) {
     if (site.sankakucomplex) uW.Sankaku.Pagination.auto_enabled = false;
     d.body.classList.add("sliding");
@@ -1181,8 +1186,7 @@ Main = {
       while(~--i) arr[i].classList.remove("outlined");
     }
     $.add($.extend(Main.el = $.c("img"),
-      { id: "slide", alt: "Loading...", onclick: Main.fn,
-      onmouseup: e => e.button === 1 && $.keyDown({keyCode:38, event:e}) }
+      { id: "slide", alt: "Loading...", onclick: Main.fn, onmouseup: Main._on }
     ));
     $.add(Main.gif = $.extend($.c("span"), { innerHTML: SVG.gif, className: "gif" }));
     const _ = $.safe(Main.slide, $.u, $("img", a).src);
@@ -1253,34 +1257,30 @@ Main = {
     $("img", node).style.outline = "";
     node.removeAttribute("data-already-loading");
   },
-  async req(node) {
-    let id = "", api;
-    if (!node) return;
-    const { dataset } = node;
-    if (dataset.alreadyLoading || dataset.full !== "loading") return;
+  getApiInfo(node) {
     switch(domain) {
      case "e621.net":
-      id = node.parentNode.id.substr(1);
-      api = "/post/show.xml?id=";
-      break;
+      return [node.parentNode.id.substr(1), "/post/show.xml?id="];
      case "yande.re":
      case "lolibooru.moe":
      case "konachan.com":
      case "hypnohub.net":
-      id = node.parentNode.id.substr(1);
-      api = "/post/show/";
-      break;
+      return [node.parentNode.id.substr(1), "/post/show/"];
      case "booru.org":
      case "tbib.org":
      case "splatoon.ink":
      case "gelbooru.com":
-      id = node.dataset.id;
-      api = "/index.php?page=post&s=view&id=";
-      break;
+      return [node.dataset.id, "/index.php?page=post&s=view&id="];
      default:
-      id = node.dataset.id;
-      api = "/index.php?page=dapi&s=post&q=index&id=";
+      return [node.dataset.id, "/index.php?page=dapi&s=post&q=index&id="];
     }
+  },
+  async req(node) {
+    if (!node) return;
+    const { dataset } = node;
+    if (dataset.alreadyLoading || dataset.full !== "loading") return;
+    const apiIfno = Main.getApiInfo(node);
+    const id = apiIfno[0], api = apiIfno[1];
     node.dataset.alreadyLoading = "true";
     try {
       const request = await fetch(api + id);
@@ -1329,6 +1329,7 @@ Main = {
       break;
      default:
       target = "form:last-of-type + div";
+      break;
     }
     for (let i = 0, arr = ["#tags", "#tags-search"]; i < 2; ++i) {
       const el = $(arr[i]);

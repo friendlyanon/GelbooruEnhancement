@@ -84,7 +84,7 @@
         process();
       } return;
     } catch(err) { console.error(err); }
-  }, req = _ => fetch(url.href).then(
+  }, req = _ => fetch(url.href, { credentials: "include" }).then(
     x => x.text().then(
       text => page((new DOMParser()).parseFromString(text, "text/html"))
     )

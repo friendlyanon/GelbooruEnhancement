@@ -1283,7 +1283,7 @@ Main = {
     const id = apiIfno[0], api = apiIfno[1];
     node.dataset.alreadyLoading = "true";
     try {
-      const request = await fetch(api + id);
+      const request = await fetch(api + id, { credentials: "include" });
       const text = await Main.processHttp(request);
       Main.processText(text, node, id);
     } catch(err) {

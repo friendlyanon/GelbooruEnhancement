@@ -1,7 +1,7 @@
 // ==UserScript==
 // @id             gelbooru-endless-scroll
 // @name           Gelbooru Endless Scroll
-// @version        1.6.9.6
+// @version        1.6.9.7
 // @namespace      intermission
 // @author         intermission
 // @description    Adds endless scroll function to various boorus
@@ -22,15 +22,14 @@
 // @grant          none
 // ==/UserScript==
 
-/* This program is free software. It comes without any warranty, to
- * the extent permitted by applicable law. You can redistribute it
- * and/or modify it under the terms of the Do What The Fuck You Want
- * To Public License, Version 2, as published by Sam Hocevar. See
- * http://www.wtfpl.net/ for more details. */
+/* This program is free software. It comes without any warranty, to the extent
+ * permitted by applicable law. You can redistribute it and/or modify it under
+ * the terms of the Do What The Fuck You Want To Public License, Version 2, as
+ * published by Sam Hocevar. See http://www.wtfpl.net/ for more details. */
 
 (function(){
   "use strict";
-  var d = document, url, host = location.hostname.match(/[^\.]+\.[^\.]+$/)[0],
+  var d = document, url, host = location.hostname.match(/[^.]+\.[^.]+$/)[0],
   v = ".thumb",
   vis = function() {
     var rect = target().getBoundingClientRect();
@@ -99,7 +98,7 @@
         console.error("Maximum number of retries reached\n", err.message, err.stack);
     }
   }), process = function(_override) {
-    if ((!d.hidden && vis()) || (typeof _override === "boolean" ? _override : false)) {
+    if (!d.hidden && vis() || (typeof _override === "boolean" ? _override : false)) {
       target().classList.add("loadingu");
       events();
       url = list.shift();
@@ -108,7 +107,7 @@
   }, events = function(_on) {
     var name = _on ? "addEventListener" : "removeEventListener", obj = { passive : true };
     ["scroll", "resize", "visibilitychange"].forEach(evt => window[name](evt, process, obj));
-  }, list = [], r = /(page=|pid=|index\/)([0-9]+)|(list\/(?:[^\/]+\/)?)([0-9]+)$/, paginator = function() {
+  }, list = [], r = /(page=|pid=|index\/)([0-9]+)|(list\/(?:[^/]+\/)?)([0-9]+)$/, paginator = function() {
     var el = target(), rect1 = d.querySelector(".thumb:last-of-type"),
       el2 = d.querySelector(".sidebar"), rect2;
     if (el.classList.contains("pagination")) el = el.parentNode;
@@ -149,7 +148,7 @@
   }
   if (target() && /\/post\/?|page=post/.test(location.href)) {
     let pid = location.href.match(r),
-    p = ((pid && pid[1] === "index/" || myImuoto) ? target().lastElementChild.previousElementSibling : target().lastElementChild).href,
+    p = (pid && pid[1] === "index/" || myImuoto ? target().lastElementChild.previousElementSibling : location.hostname.endsWith("rule34.xxx") ? [...target().children].find(a => a.getAttribute("alt") === "last page") : target().lastElementChild).href,
     n = d.querySelectorAll(v).length,
     start_index, end_index, increment = 1, index = 0;
     if (host === "paheal.net") {
@@ -203,7 +202,7 @@
   } else
     throw Error("*shrug*");
   if (paginator.go) paginator();
-  window.addEventListener("keypress", e => {
+  window.addEventListener("keypress", () => {
     if (typeof url !== "object" && vis()) process();
   }, { once : true });
   d.addEventListener("gelbooru-slide", e => {

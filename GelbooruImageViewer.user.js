@@ -1,7 +1,7 @@
 // ==UserScript==
 // @id             gelbooru-slide
 // @name           Gelbooru Image Viewer
-// @version        1.9.9.8
+// @version        1.9.9.9
 // @namespace      intermission
 // @author         intermission
 // @license        WTFPL; http://www.wtfpl.net/about/
@@ -35,6 +35,8 @@
  * the terms of the Do What The Fuck You Want To Public License, Version 2, as
  * published by Sam Hocevar. See http://www.wtfpl.net/ for more details. */
 
+/* global GM_registerMenuCommand, GM_xmlhttpRequest, GM_info, unsafeWindow */
+
 "use strict";
 
 /**
@@ -49,7 +51,7 @@ const SAFE_DEBUG = false;
 const d = document;
 const w = window;
 const stor = localStorage;
-const uW = unsafeWindow || w;
+const uW = typeof unsafeWindow !== "undefined" ? unsafeWindow : w;
 const domain = location.hostname.match(/[^.]+\.[^.]+$/)[0];
 const scriptInfo = GM_info;
 const ns = "gelbooru-slide";
@@ -70,25 +72,25 @@ const httpOk = [200, 302, 304];
 const site = (() => {
   const info = scriptInfo.scriptMetaStr;
   const regex = /match.*?[/.](\w+\.\w+)\//g;
-  const ret = { name: "" };
+  const ret = Object.setPrototypeOf({ name: "", inject: "" }, null);
   let line, name;
-  while (line = regex.exec(info)) {
+  while (line = regex.exec(info)) { // eslint-disable-line no-cond-assign
     if (line[1] === domain) {
       ret[name = domain.split(".")[0]] = true;
       ret.name = name;
       break;
     }
   }
-  const qS = 'document.querySelector("#post-list > .content';
-  const iB = 'insertBefore';
+  const qS = `document.querySelector("#post-list > .content`;
+  const iB = "insertBefore";
   switch(name) {
    case "hypnohub":
-    ret.inject = 'Object.defineProperties(window.PostModeMenu, {\n  "post_mouseover": {\n    value() {}\n  },\n  "post_mouseout": {\n    value() {}\n  }\n});';
+    ret.inject += `Object.defineProperties(window.PostModeMenu, {\n  "post_mouseover": {\n    value() {}\n  },\n  "post_mouseout": {\n    value() {}\n  }\n});`;
     break;
    case "sankakucomplex":
-    ret.inject = `Object.defineProperty(${qS}"), "${iB}", {\n  value: function ${iB}(newEl, pos) {\n    if (newEl.nodeType !== 11)\n      return (pos.nodeType === 3 ? pos.nextElementSibling : pos).insertAdjacentElement("beforebegin", newEl);\n    else {\n      let s = ${qS} > div:first-of-type");\n      for (let i = 0, t, arr = newEl.firstElementChild.children; t = arr[i]; ++i) {\n        t.classList.remove("blacklisted");\n        t.removeAttribute("style");\n        s.appendChild(t);\n      }\n    }\n    return newEl;\n  }\n})`;
+    ret.inject += `Object.defineProperty(${qS}"), "${iB}", {\n  value: function ${iB}(newEl, pos) {\n    if (newEl.nodeType !== 11)\n      return (pos.nodeType === 3 ? pos.nextElementSibling : pos).insertAdjacentElement("beforebegin", newEl);\n    else {\n      const s = ${qS} > div:first-of-type");\n      for (const t of newEl.firstElementChild.children) {\n        t.classList.remove("blacklisted");\n        t.removeAttribute("style");\n        s.appendChild(t);\n      }\n    }\n    return newEl;\n  }\n})`;
   }
-  return Object.freeze(ret);
+  return ret;
 })();
 
 /**
@@ -103,7 +105,7 @@ const paheal = site.paheal ? 20 : 0;
 const SVG = {
   play: `${svg}width="50" height="50"><rect rx="5" height="48" width="48" y="1" x="1" fill="#fff" /><polygon fill="#000" points="16 12 16 38 36 25" /></svg>`,
   pause: `${svg}width="50" height="50"><rect fill="#fff" x="1" y="1" width="48" height="48" rx="5" /><rect fill="#000" x="12" y="12" width="10" height="26" /><rect fill="#000" x="28" y="12" width="10" height="26" /></svg>`,
-  next: ((z, a, b, c, r) => `${svg}viewBox="0 0 118 118"><style>.a{fill:none;stroke-linejoin:round;stroke-width:4;stroke:#fff}</style><path d="M78.6 71.8l-7.6-1.6${a}${z}-1-3.7l5.8-5.2a4.3 4.3${z}-4.2-7.3l-7.4 2.4a29.7 29.7${z}-2.7-2.7l2.4-7.4a4.3 4.3${z}-7.3-4.2L51.5 48${a}${z}-3.7-1l-1.6-7.6a4.3 4.3${z}-8.4 0l-1.6 7.6${a}${z}-3.7 1l-5.2-5.8a4.3 4.3${z}-7.3 4.2l2.4 7.4a29.7 29.7${z}-2.7 2.7l-7.4-2.4a4.3 4.3${z}-4.2 7.3L14 66.5${a}${z}-1 3.7l-7.6 1.6a4.3 4.3${z} 0 8.4l7.6 1.6${a}${z} 1 3.7l-5.8 5.2a4.3 4.3${z} 4.2 7.3l7.4-2.4a29.8 29.8${z} 2.7 2.7l-2.4 7.4a4.3 4.3${z} 7.3 4.2l5.2-5.8${a}${z} 3.7 1l1.6 7.6a4.3 4.3${z} 8.4 0l1.6-7.6${a}${z} 3.7-1l5.2 5.8a4.3 4.3${z} 7.3-4.2l-2.4-7.4a29.8 29.8${z} 2.7-2.7l7.4 2.4a4.3 4.3${z} 4.2-7.3L70 85.5${a}${z} 1-3.7l7.6-1.6A4.3 4.3${z} 78.6 71.8zM42 92.5A16.5 16.5 0 1 1 58.5 76 16.5 16.5 0 0 1 42 92.5z${r}0 42 76.051" to="360 42 76.051" dur=3${c}<path d="M113.2 24.5l-6.9-1.6${b}${z}-1.1-3l3.7-5.9a3.6 3.6${z}-5-5L98 12.8${b}${z}-3-1.1l-1.6-6.9a3.6 3.6${z}-7 0l-1.6 6.9a16.9 16.9${z}-2.8 1.2l-6-3.8a3.6 3.6${z}-5 5l3.8 6a16.9 16.9${z}-1.2 2.8l-6.9 1.6a3.6 3.6${z} 0 7l6.9 1.6${b}${z} 1.1 3l-3.7 5.9a3.6 3.6${z} 5 5L82 43.2${b}${z} 3 1.1l1.6 6.9a3.6 3.6${z} 7 0l1.6-6.9a16.9 16.9${z} 2.8-1.2l6 3.8a3.6 3.6${z} 5-5l-3.8-6a16.9 16.9${z} 1.2-2.8l6.9-1.6A3.6 3.6${z} 113.2 24.5z${r}360 89.97 28" to="0 89.97 28" dur=2${c}<circle r=8.4 style="fill:none;stroke-width:4;stroke:#fff" cx=89.97 cy=28></circle></svg>`)(" 0 0 0", "a29.3 29.3", "a20.6 20.6", 's></animateTransform></path>', '" class=a><animateTransform attributeName=transform type=rotate repeatCount=indefinite from="'),
+  next: ((z, a, b, c, r) => `${svg}viewBox="0 0 118 118"><style>.a{fill:none;stroke-linejoin:round;stroke-width:4;stroke:#fff}</style><path d="M78.6 71.8l-7.6-1.6${a}${z}-1-3.7l5.8-5.2a4.3 4.3${z}-4.2-7.3l-7.4 2.4a29.7 29.7${z}-2.7-2.7l2.4-7.4a4.3 4.3${z}-7.3-4.2L51.5 48${a}${z}-3.7-1l-1.6-7.6a4.3 4.3${z}-8.4 0l-1.6 7.6${a}${z}-3.7 1l-5.2-5.8a4.3 4.3${z}-7.3 4.2l2.4 7.4a29.7 29.7${z}-2.7 2.7l-7.4-2.4a4.3 4.3${z}-4.2 7.3L14 66.5${a}${z}-1 3.7l-7.6 1.6a4.3 4.3${z} 0 8.4l7.6 1.6${a}${z} 1 3.7l-5.8 5.2a4.3 4.3${z} 4.2 7.3l7.4-2.4a29.8 29.8${z} 2.7 2.7l-2.4 7.4a4.3 4.3${z} 7.3 4.2l5.2-5.8${a}${z} 3.7 1l1.6 7.6a4.3 4.3${z} 8.4 0l1.6-7.6${a}${z} 3.7-1l5.2 5.8a4.3 4.3${z} 7.3-4.2l-2.4-7.4a29.8 29.8${z} 2.7-2.7l7.4 2.4a4.3 4.3${z} 4.2-7.3L70 85.5${a}${z} 1-3.7l7.6-1.6A4.3 4.3${z} 78.6 71.8zM42 92.5A16.5 16.5 0 1 1 58.5 76 16.5 16.5 0 0 1 42 92.5z${r}0 42 76.051" to="360 42 76.051" dur=3${c}<path d="M113.2 24.5l-6.9-1.6${b}${z}-1.1-3l3.7-5.9a3.6 3.6${z}-5-5L98 12.8${b}${z}-3-1.1l-1.6-6.9a3.6 3.6${z}-7 0l-1.6 6.9a16.9 16.9${z}-2.8 1.2l-6-3.8a3.6 3.6${z}-5 5l3.8 6a16.9 16.9${z}-1.2 2.8l-6.9 1.6a3.6 3.6${z} 0 7l6.9 1.6${b}${z} 1.1 3l-3.7 5.9a3.6 3.6${z} 5 5L82 43.2${b}${z} 3 1.1l1.6 6.9a3.6 3.6${z} 7 0l1.6-6.9a16.9 16.9${z} 2.8-1.2l6 3.8a3.6 3.6${z} 5-5l-3.8-6a16.9 16.9${z} 1.2-2.8l6.9-1.6A3.6 3.6${z} 113.2 24.5z${r}360 89.97 28" to="0 89.97 28" dur=2${c}<circle r=8.4 style="fill:none;stroke-width:4;stroke:#fff" cx=89.97 cy=28></circle></svg>`)(" 0 0 0", "a29.3 29.3", "a20.6 20.6", "s></animateTransform></path>", '" class=a><animateTransform attributeName=transform type=rotate repeatCount=indefinite from="'),
   debug: (l => `<div style="width:calc(100vw - 2px);height:${198+paheal}px;position:absolute;top:0;left:0;border:1px solid cyan"></div><div style="width:calc(100vw - 2px);height:calc(100vh - ${202+paheal}px);position:absolute;bottom:0;border:1px solid red;display:block">${svg}viewBox="0 0 200 200" preserveAspectRatio=none style="width: 100%;height: 100%;"><style>.d{fill:none;stroke-width:1px;stroke:#ff0}</style>${l}d y2=15 x2=200 y1=15></line>${l}d y2=185.5 x2=200 y1=185.5></line>${l}d x2=15 y1=200 x1=15></line>${l}d x2=185 y1=200 x1=185></line></svg></div><div style="width:100vw;height:100vh;position:absolute;top:0;left:0">${svg}viewBox="0 0 200 200" preserveAspectRatio=none style="width: 100%;height: 100%;"><style>.b{fill:none;stroke-width:1px;stroke:#0f0}</style>${l}b y2=100 x2=200 y1=100></line>${l}b y2=200 x2=100 x1=100></line></svg></div>`)('<line vector-effect="non-scaling-stroke" shape-rendering="crispEdges" class='),
   gif: `${svg}viewBox="-10 -3 36 22"><path d="M26 16c0 1.6-1.3 3-3 3H-7c-1.7 0-3-1.4-3-3V0c0-1.7 1.3-3 3-3h30c1.7 0 3 1.3 3 3v16z" opacity=".6"/><path fill="#FFF" d="M22-1H-6c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h28c1.1 0 2-.9 2-2V1c0-1.1-.9-2-2-2zM6.3 13.2H4.9l-.2-1.1c-.4.5-.8.9-1.3 1.1-.5.2-1 .3-1.4.3-.8 0-1.5-.1-2.1-.4s-1.1-.6-1.5-1.1-.7-1-1-1.6C-2.9 9.7-3 9-3 8.3c0-.7.1-1.4.3-2.1.2-.6.5-1.2 1-1.7s.9-.8 1.5-1.1C.5 3.2 1.2 3 1.9 3c.5 0 1 .1 1.5.2.5.2.9.4 1.3.7.4.3.7.7 1 1.1.2.5.4 1 .4 1.5H4c-.1-.5-.3-.9-.7-1.2-.4-.3-.8-.4-1.4-.4-.5 0-.9.1-1.2.3-.4.1-.7.4-.9.7-.2.3-.3.7-.4 1.1s-.1.8-.1 1.3c0 .4 0 .8.1 1.2s.3.8.5 1.1c.2.3.5.6.8.8s.8.3 1.3.3c.7 0 1.3-.2 1.7-.6.4-.4.6-.9.7-1.6H2.1V7.8h4.2v5.4zm4 0H8.1v-10h2.2v10zm8.9-8.1h-4.8v2.3h4.2v1.7h-4.2v4.1h-2.2v-10h7v1.9z"/></svg>`,
   warn: `${svg}viewBox="0 0 1000 1000"><style>path.a{fill:red;stroke-width:8px;stroke:black;}</style><path d="M500 673c-17 0-34 4-48 11-24 12-44 33-55 58-5 14-9 28-9 44 0 62 50 113 112 113 63 0 113-50 113-113C613 723 562 673 500 673zM500 843c-32 0-58-26-58-58 0-32 26-58 58-58 32 0 59 26 59 58C558 817 532 843 500 843z" class="a"/><path d="M285 643c4 3 8 5 12 5l132-138c-57 14-109 47-149 94C272 617 273 634 285 643z" class="a"/><path d="M606 522L565 565c43 13 83 39 112 75 5 7 13 10 21 10 6 0 12-2 17-6 11-9 13-27 3-38C689 568 650 539 606 522z" class="a"/><path d="M500 384c16 0 32 1 48 3l46-48c-30-7-61-10-93-10-137 0-265 61-351 167-10 11-8 29 4 38 5 4 11 7 17 7 8 0 15-4 21-10C267 438 379 384 500 384z" class="a"/><path d="M729 393l-38 40c45 24 86 58 119 98 10 12 27 14 39 4 12-9 13-27 4-38C817 454 776 420 729 393z" class="a"/><path d="M685 244l41-43c-70-28-147-42-226-42-188 0-364 84-484 230-9 12-7 29 4 39 5 4 11 6 17 6 8 0 16-3 21-10 109-133 270-210 442-210C564 214 626 224 685 244z" class="a"/><path d="M984 389c-38-48-83-88-133-121l-38 40c49 32 93 71 130 117 9 11 27 13 38 4C991 418 994 401 984 389z" class="a"/><path d="M907 110c-11-10-28-10-38 1L181 828c-10 11-10 28 1 38 5 5 12 8 19 8 7 0 14-3 20-8L908 148C918 138 918 120 907 110z" class="a"/></svg>`
@@ -117,7 +119,7 @@ let slideshow;
 /**
  * NAMESPACES
  */
-let Pos, Menu, Btn, Main, Prog, Sank, Hover;
+let Pos, Menu, Btn, Main, Prog, Hover;
 
 /**
  * SET AN INITIAL VALUE ON FIRST RUN
@@ -134,42 +136,36 @@ switch(site.name) {
   GM_registerMenuCommand(`Current image mode: ${fullImage ? "Always original size" : "Sample only"}`, () => { stor[ns] = fullImage ? "false" : "true"; location.reload(); });
   break;
 }
-  
 
 /**
  * JQUERY INSPIRED UTILITIES
  * details won't be documented, just look at the code
  */
-const $$ = (a, b = d) => {
-  const nodeList = b.querySelectorAll(a);
-  let l = nodeList.length;
-  if (!l) return [];
-  const array = new Array(l);
-  while(~--l) array[l] = nodeList[l];
-  return array;
-};
+const $$ = (a, b = d) => Array.prototype.slice.call(b.querySelectorAll(a));
 const $ = (a, b = d) => b.querySelector(a);
 
 $.keys = Object.keys;
 
 $.extend = function(obj, props) {
   const arr = $.keys(props);
-  let key, i = arr.length;
-  while(~--i) obj[key = arr[i]] = props[key];
+  for (let i = 0, key, len = arr.length; i < len; ++i) {
+    obj[key = arr[i]] = props[key];
+  }
   return obj;
 };
 
 $.extend($, {
   cache(id, b) {
+    if (site.sankakucomplex) return "loading";
     const val = fullImage ? "original" : "sample";
     let ret, obj, temp;
     if (!b) {
-      const json = $.safe(JSON.parse, $.u, stor[ns + id]);
+      const json = $.safe(JSON.parse, null, stor[ns + id]);
       if (json !== $.safe.error) ret = json[val];
       ret = ret || "loading";
     }
     else {
-      const json = $.safe(JSON.parse, $.u, stor[ns + id]);
+      const json = $.safe(JSON.parse, null, stor[ns + id]);
       if (json !== $.safe.error) temp = json;
       obj = temp || {};
       obj[val] = b;
@@ -179,23 +175,22 @@ $.extend($, {
     return ret;
   },
   base: a => a.match(Main.r[5]),
-  current: src => $("a[data-id] > img[src*='" + $.base(src || Main.el.dataset.src) + "']").parentNode,
+  id: (a, b = d) => b.getElementById(a),
+  current: src => $(`a[data-id] > img[src*="${$.base(src || Main.el.dataset.src)}"]`).parentNode,
   _find(method, el, a) {
-    el = el[(method ? "next" : "previous") + "ElementSibling"];
+    el = el[`${method ? "next" : "previous"}ElementSibling`];
     a = $("a[data-full]", el);
     return [el, a];
   },
   find(el, method) {
-    let a;
+    const { _find, safe, safe: { error } } = $;
+    let a, search;
     el = el.parentNode;
     do {
-      const search = $.safe($._find, $.u, method, el, a);
-      if (search === $.safe.error) return false;
-      else [el, a] = search;
-      if (a) break;
-      a = false;
-    } while(!a);
-    return a;
+      if ((search = safe(_find, null, method, el, a)) === error) return false;
+      else ({ 0: el, 1: a } = search);
+      if (a) return a;
+    } while(1); // eslint-disable-line no-constant-condition
   },
   preload() {
     if (site.sankakucomplex) return;
@@ -241,8 +236,8 @@ $.extend($, {
       else if (!$.keyDown.el) {
         const el = $.keyDown.el = $.c("div");
         el.classList.add("nomoreimages");
-        let side = move ? "right" : "left";
-        el.setAttribute("style", "background: linear-gradient(to " + side + ", transparent, rgba(255,0,0,.5));" + side + ": 0;");
+        const side = move ? "right" : "left";
+        el.setAttribute("style", `background: linear-gradient(to ${side}, transparent, rgba(255,0,0,.5));${side}: 0;`);
         $.add(el);
       }
     }
@@ -266,16 +261,16 @@ $.extend($, {
       { clientX: x, clientY: y } = e,
       tall = Main.el.naturalHeight > maxY, wide = Main.el.naturalWidth > maxX;
     if (!$.zoom.el) {
-      let el = $.zoom.el = $.c("span");
+      const el = $.zoom.el = $.c("span");
       el.id = "zoom_top";
       el.innerHTML = "<span></span>";
       $.add(el);
     }
     if ((wide || tall) && minY < y && maxY >= y && 0 <= x && maxX >= x) {
-      let xPos = 50, yPos = 50, margin, width, height;
+      let xPos = 50, yPos = 50;
       if (tall) {
-        margin = (maxY - minY) * 0.075;
-        height = maxY - minY - margin * 2;
+        const margin = (maxY - minY) * 0.075;
+        const height = maxY - minY - margin * 2;
         if (y < minY + margin)
           yPos = 0;
         else if (y > maxY - margin)
@@ -284,8 +279,8 @@ $.extend($, {
           yPos = (y - minY - margin) / height * 100;
       }
       if (wide) {
-        margin = maxX * 0.075;
-        width = maxX - margin * 2;
+        const margin = maxX * 0.075;
+        const width = maxX - margin * 2;
         if (x < margin)
           xPos = 0;
         else if (x > maxX - margin)
@@ -295,67 +290,58 @@ $.extend($, {
       }
       $.zoom.el.removeAttribute("style");
       if (tall && yPos < 10) {
-        let w = maxX / 40 + 30;
+        const w = maxX / 40 + 30;
         $.zoom.el.style.left = `${x - (w < 55 ? 55 : w)}px`;
         void $.zoom.el.offsetWidth; // reflow hack
         $.zoom.el.style.animationName = "topglowything";
       }
       Main.el.style.objectPosition = `${xPos}% ${yPos}%`;
     }
-    else if (!Main.el.style.objectPosition)
+    else if (!Main.el.style.objectPosition) {
       Main.el.style.objectPosition = "50% 50%";
+    }
   },
   c: c => d.createElement(c),
   r: (() => {
     let queue = [];
     d.addEventListener("DOMContentLoaded", () => {
-      let i = queue.length;
-      while(~--i) {
-        const obj = queue[i], args = obj.args, len = args.length, copy = new Array(len + 2);
-        copy[0] = obj.fn;
-        {
-          let i = 1, p = -1;
-          while(++p < len) copy[++i] = args[p];
-        }
+      for (let i = 0, len = queue.length; i < len; ++i) {
+        const obj = queue[i], copy = [obj.fn, null];
+        copy.push.apply(copy, obj.args);
         $.safe.apply($, copy);
       }
-      queue = $.u;
+      queue = null;
     }, once);
     return (fn, ...args) => queue ?
       queue[queue.length] = { fn, args } :
-      $.safe(fn, $.u, ...args);
+      $.safe(fn, null, ...args);
   })(),
   rm: el => { if (el) el.parentNode.removeChild(el); },
   ins: (el, m, t) => el.insertAdjacentHTML(m, t),
   eval(text = "") {
     const script = $.c("script");
-    $.add(new Text(text), script);
+    script.innerHTML = text;
     $.add(script, d.documentElement);
-    $.rm(script);
   },
-  in: ((isArray, obj) => {
+  in: (obj => {
     const arr = function inArray(key) {
-      let i = this.length;
-      while(~--i) {
-        if (key === this[i]) {
-          return true;
-        }
+      for (let i = 0, len = this.length; i < len; ++i) {
+        if (key === this[i]) return true;
       }
       return false;
     };
-    return (key, o) => (isArray(o) ? arr : obj).call(o, key);
-  })(Array.isArray, Object.prototype.hasOwnProperty),
+    return (k, o) => o && (typeof o.length === "number" ? arr : obj).call(o, k);
+  })(Object.prototype.hasOwnProperty),
   add(el, to = d.body) {
     $.safe(to.appendChild, to, el);
     return el;
   },
-  safe: (() => {
-    const safeError = Symbol();
+  safe: (safeError => {
     function safe(fn, context) {
-      const k = arguments.length, args = new Array(k - 2);
+      const k = arguments.length, args = [];
       {
         let i = 1, p = -1;
-        while(++i < k) args[++p] = arguments[i];
+        while (++i < k) args[++p] = arguments[i];
       }
       try { return fn.apply(context, args); }
       catch(e) {
@@ -365,19 +351,15 @@ $.extend($, {
     }
     safe.error = safeError;
     return safe;
-  })(),
+  })(Symbol()),
   _evt() {
     if (typeof arguments[0] === "string") {
-      return d[(this ? "add" : "remove") + "EventListener"](
-        arguments[0], arguments[1], arguments[2]
-      );
+      return d[this](arguments[0], arguments[1], arguments[2]);
     }
-    return arguments[0][(this ? "add" : "remove") + "EventListener"](
-      arguments[1], arguments[2], arguments[3]
-    );
+    return arguments[0][this](arguments[1], arguments[2], arguments[3]);
   },
-  on() { return $._evt.apply(true, arguments); },
-  off() { return $._evt.apply(false, arguments); },
+  on() { return $._evt.apply("addEventListener", arguments); },
+  off() { return $._evt.apply("removeEventListener", arguments); },
   u: void 0
 });
 
@@ -387,9 +369,8 @@ $.extend($, {
 {
   const version = "1.8.8";
   if (stor[ns + "-firstrun"] !== version) {
-    const r = /^gelbooru-slide./, arr = $.keys(stor);
-    let i = arr.length;
-    while(~--i) {
+    const r = /^gelbooru-slide./, arr = $.keys(stor), len = arr.length;
+    for (let i = 0; i < len; ++i) {
       const a = arr[i];
       r.test(a) && stor.removeItem(a);
     }
@@ -404,23 +385,23 @@ $.extend($, {
 Pos = {
   fn(a) {
     let el = Pos.el;
-    if (a !== $.u) {
+    if (a != null) {
       switch(typeof a) {
        case "string":
         $("span", el).innerHTML = ++a;
         break;
        case "boolean": {
         const no = $("span", el);
-        no.innerHTML = +no.innerHTML + (a ? 1 : -1); }
+        no.innerHTML = Number(no.textContent) + (a ? 1 : -1); }
         break;
        case "number":
-        el.lastElementChild.lastChild.data = " / " + a;
+        el.lastElementChild.lastChild.data = ` / ${a}`;
       }
       el.title = el.textContent;
       if (Menu.el) {
         const arr = $$("a:not([download])", Menu.el);
         let i = arr.length;
-        while(~--i) arr[i].href = $.current().href;
+        while (~--i) arr[i].href = $.current().href;
         Menu.download();
       }
     }
@@ -451,20 +432,20 @@ Menu = {
     let el = Menu.el;
     if (el) {
       el.removeAttribute("class");
-      setTimeout(() => el.classList.add("menuel"), 10);
+      setTimeout($.safe, 10, el.classList.add, el.classList, "menuel");
     }
     else {
-      const href = $.current().href, s = '" style="margin-bottom: 2px"';
+      const href = $.current().href + '" style="margin-bottom: 2px"';
       el = $.c("div");
       el.id = "menuel";
-      $.ins(el, "beforeend", `<a href="${href+s}>Open in This Tab</a><a href="${href+s} target="_blank">Open in New Tab</a><a href="javascript:;">Save Image As...</a>`);
+      $.ins(el, "beforeend", `<a href="${href}>Open in This Tab</a><a href="${href} target="_blank">Open in New Tab</a><a href="javascript:;">Save Image As...</a>`);
       $.add(el);
       Menu.el = el;
       $.on(el.lastElementChild, "click", Menu.copyFilename);
       el.classList.add("menuel");
       if (Menu.realDl) Menu.download();
     }
-    return $.extend(el.style, {left, top});
+    return $.extend(el.style, { left, top });
   },
   download() {
     const el = Menu.realDl;
@@ -496,9 +477,9 @@ Btn = {
     }
     else {
       el = $.c("div");
-      el.setAttribute("style", 'opacity: .7;');
+      el.setAttribute("style", "opacity: .7;");
       el.className = "slideshow";
-      $.ins(el, 'beforeend', `<span title="Slideshow">${SVG.play}</span><div style="display:none;padding:10px 0">Options<hr><label>Loop:&nbsp;<input type="checkbox" checked></label>&nbsp;<label onclick="${sel}.checked=true;${sel}.disabled=!${sel}.disabled">Shuffle:&nbsp;<input type="checkbox"></label><br>Interval:&nbsp;<input type="number" value="5" style="width:100px"></div>`);
+      $.ins(el, "beforeend", `<span title="Slideshow">${SVG.play}</span><div style="display:none;padding:10px 0">Options<hr><label>Loop:&nbsp;<input type="checkbox" checked></label>&nbsp;<label onclick="${sel}.checked=true;${sel}.disabled=!${sel}.disabled">Shuffle:&nbsp;<input type="checkbox"></label><br>Interval:&nbsp;<input type="number" value="5" style="width:100px"></div>`);
       Btn.state = true;
       el.firstElementChild.onclick = Btn.cb;
       $.add(el);
@@ -506,11 +487,12 @@ Btn = {
     }
   },
   clear() {
-    clearTimeout(+Btn.el.dataset.timer);
+    clearTimeout(Number(Btn.el.dataset.timer));
     Btn.el.removeAttribute("data-timer");
   },
   cb: ((thumbs, el, options, orig) => {
     const sel = ".thumb a[data-full]",
+      validate = a => a.type === "number" ? (a.value >= 1 ? a.value : 1) * 1E3 : a.checked,
       _fnS = () => { if (el.dataset.timer) el.dataset.timer = setTimeout(_fnT, options[2]); };
     const _fnT = () => {
       let _el;
@@ -525,16 +507,14 @@ Btn = {
       $.on(Main.el, "load", _fnS, once);
       Main.slide($("img", _el).src);
     };
-    return function() {
+    const cb = () => {
       el = Btn.el;
       Pos.fn();
       slideshow = !!Btn.state;
       el.firstElementChild.innerHTML = (Btn.state = !Btn.state) ? SVG.play : SVG.pause;
       if (slideshow) {
         thumbs = [];
-        options = $$("div input", el).map(a =>
-          a.type === "number" ? (a.value >= 1 ? +a.value : 1) * 1E3 : a.checked
-        );
+        options = $$("div input", el).map(validate);
         el.dataset.timer = setTimeout(_fnT, options[2]);
         el.style.opacity = 0.4;
         Hover.el.setAttribute("style", "display: none !important");
@@ -553,6 +533,11 @@ Btn = {
         else d.body.removeAttribute("style");
       }
     };
+    cb.move = () => {
+      clearTimeout(Number(Btn.el.dataset.timer));
+      _fnT();
+    };
+    return cb;
   })([]),
   hide() {
     const b = d.body;
@@ -574,10 +559,10 @@ Prog = {
     if (!$.in(e.status, httpOk) || !Main.r[5].test(e.finalUrl))
       return Prog.error(e);
     else {
-      let blobUrl = w.URL.createObjectURL(
-        new Blob([e.response], {type: "image/" + ext.replace("jpeg", "jpg")})
+      const blobUrl = w.URL.createObjectURL(
+        new Blob([e.response], { type: `image/${ext.replace("jpeg", "jpg")}` })
       );
-      $("a[data-id='" + id + "']").dataset.blob = blobUrl;
+      $(`a[data-id="${id}"]`).dataset.blob = blobUrl;
       if (Main.el && Prog.check(id)) {
         el.classList.add("progdone");
         Main.el.src = blobUrl;
@@ -597,14 +582,15 @@ Prog = {
     const id = e.context && e.context.id;
     if (Main.el && Prog.check(id) && el) {
       el.classList.remove("progfail");
-      el.style.width = ($.in(id, Prog.reqs) ? e.loaded / e.total * 100 : 0) + "%";
+      el.style.width = `${$.in(id, Prog.reqs) ? e.loaded / e.total * 100 : 0}%`;
     }
   },
   error(e) {
     const el = Prog.el, id = e.context.id;
-    if (Main.el && Prog.check(id) && el) {
+    if (Main.el && Prog.check(id) && el) _: {
       el.classList.add("progfail");
       const req = Prog.reqs[id];
+      if (req == null) break _;
       $.safe(req.abort, req);
       delete Prog.reqs[id];
     }
@@ -612,17 +598,56 @@ Prog = {
       Main.el.dispatchEvent(new Event("load"));
     stor.removeItem(ns + id);
     if (!site.paheal)
-      $("a[data-id='" + id + "']").dataset.full = $.cache(id, "loading");
+      $(`a[data-id="${id}"]`).dataset.full = $.cache(id, "loading");
   },
-  fn(url, id) {
+  parser: new DOMParser,
+  helper: class { then(r, e) {
+    Prog.reqs[this.id] = GM_xmlhttpRequest(Object.assign({}, this.details, {
+      onload: r,
+      onerror: e,
+      onabort: e,
+      ontimeout: e
+    }));
+  } },
+  async sankaku(url, id, extra) {
+    const req = new Prog.helper;
+    req.id = id;
+    const headers = {
+      Cookie: document.cookie,
+      Referer: location.href
+    };
+    req.details = {
+      url,
+      method: "GET",
+      headers
+    };
+    const res = await req;
+    extra.dataset.full = headers.Referer = res.finalUrl;
+    extra.removeAttribute("data-already-loading");
+    const doc = Prog.parser.parseFromString(res.responseText, "text/html");
+    const a = doc.querySelector("#image-link");
+    url = fullImage && a.href ? a.href : a.firstElementChild.src;
+    return [url, headers];
+  },
+  async fn(url, id, extra) {
     if ($.in(id, Prog.reqs)) return;
-    if (url.startsWith("//assets2"))
-      url = "//gelbooru.com/" + url.substr(22);
+    let headers;
+    if (url.startsWith("//assets2")) {
+      url = `//gelbooru.com/${url.substr(22)}`;
+    }
+    else if (site.sankakucomplex) {
+      try { ({ 0: url, 1: headers } = await Prog.sankaku(url, id, extra)); }
+      catch (e) {
+        Prog.error({ context: { id } });
+        throw e;
+      }
+    }
     if (Prog.el) Prog.el.style.width = 0;
     Prog.reqs[id] = GM_xmlhttpRequest({
-      context: { id, url, ext: url.match(Main.r[2])[1] },
+      url,
+      headers,
+      context: { id, url, ext: url.match(Main.r[2])[1], extra },
       method: "GET",
-      url: url,
       responseType: "arraybuffer",
       onload: Prog.load,
       onprogress: Prog.progress,
@@ -631,98 +656,7 @@ Prog = {
       ontimeout: Prog.error
     });
   },
-  reqs: Object.create(null)
-};
-
-/**
- * MODULE FOR DOWNLOADING, PROGRESS DISPLAY AND IMAGE HANDLING ON SANKAKUCOMPLEX
- * iframe magic was required due to some fuckery on the site
- */
-Sank = {
-  fn(id, curr) {
-    if ($$(`iframe.proxY[src$='${id}']`).length) return;
-    if (curr.dataset.blob) {
-      Main.el.src = curr.dataset.blob;
-      if (Menu.el) Menu.download();
-      if (Prog.el) Prog.el = $.rm(Prog.el);
-      let el = Prog.progress();
-      el.style.width = "100%";
-      return el.classList.add("progdone");
-    }
-    if (Prog.el) Prog.el.style.width = 0;
-    const proxy = $.extend($.c("iframe"), {
-      className: "proxY",
-      sandbox: "allow-same-origin",
-      src: "/post/show/" + id,
-      scrolling: "no",
-      width: 100,
-      height: 100,
-      style: "position: fixed; top: -100vh; display: block"
-    });
-    $.on(proxy, "load", Sank.proxyLoad);
-    $.on(proxy, "error", Sank.proxyError);
-    $.add(proxy);
-  },
-  proxyLoad(e) {
-    e.currentTarget.contentWindow.postMessage(ns + "fetch", "*");
-  },
-  proxyError(e) {
-    $.rm(e.currentTarget);
-    Prog.progress().classList.add("progfail");
-  },
-  listener(e) {
-    const { source } = e;
-    let cmd, data;
-    if (typeof e.data === "string")
-      cmd = e.data;
-    else
-      ({cmd, data} = e.data);
-    if (!cmd.startsWith(ns)) return;
-    switch(cmd.substr(ns.length)) {
-     case "suicide":
-      return source.postMessage("destroy", "*");
-     case "fetch":
-      const idImgSrc = $("#post-view + img").src;
-      return GM_xmlhttpRequest({
-        context: { id: idImgSrc.substr(idImgSrc.lastIndexOf("/") + 1), source },
-        method: "GET",
-        url: $("#image").src,
-        responseType: "arraybuffer",
-        onload: Sank.load,
-        onprogress: Sank.progress,
-        onerror: Sank.error,
-        onabort: Sank.error,
-        ontimeout: Sank.error
-      });
-     case "progress":
-      const { loaded, total } = data;
-      return Prog.progress({context: {id: data.id}, loaded, total});
-     case "load":
-      const blobUrl = w.URL.createObjectURL(
-        new Blob([data.response], {type: "image/" + data.ext.replace("jpeg", "jpg")})
-      );
-      $("a[data-id='" + data.id + "']").dataset.blob = blobUrl;
-      if (Main.el && Prog.check(data.id)) {
-        Prog.progress().classList.add("progdone");
-        Main.el.src = blobUrl;
-        if (Menu.el) Menu.download();
-      }
-     case "error":
-      if (!blobUrl) Prog.progress().classList.add("progfail");
-     case "destroy":
-      $.rm($(`iframe.proxY[src$='${data.id}']`));
-    }
-  },
-  load({ finalUrl, response, context: { id, source } }) {
-    const ext = finalUrl.match(Main.r[2])[1];
-    source.postMessage({ cmd: ns + "load", data: { id, response, ext } }, "*", [response]);
-  },
-  progress({ loaded, total, context: { id, source } }) {
-    source.postMessage({ cmd: ns + "progress", data: { id, total, loaded } }, "*");
-  },
-  error({ context: { id, source } }) {
-    source.postMessage({ cmd: ns + "error", data: { id } }, "*");
-  }
+  reqs: Object.setPrototypeOf({}, null)
 };
 
 /**
@@ -748,7 +682,7 @@ Hover = {
     {
       const arr = $$("a[data-full]"), len = arr.length;
       let i = -1;
-      while(++i < len) Hover.build(arr[i]);
+      while (++i < len) Hover.build(arr[i]);
     }
     Hover.el = el;
     Hover.kinetic();
@@ -814,12 +748,12 @@ Hover = {
       return Hover.prevent = null;
     Main.slide(e);
     Hover.center(e);
-    if (Pos.el) Pos.fn($("img[src*='" + $.base(e) + "']", Hover.el).dataset.nth);
+    if (Pos.el) Pos.fn($(`img[src*="${$.base(e)}"]`, Hover.el).dataset.nth);
   },
   center(src) {
     if (!(Hover.wrap || Hover.el)) return;
     const base = $.base(src),
-      img = $("img[src*='" + base + "']", Hover.el),
+      img = $(`img[src*="${base}"]`, Hover.el),
       pos = img.dataset.nth,
       scroll = Hover.wrap,
       half = scroll.offsetWidth / 2,
@@ -871,7 +805,7 @@ Hover = {
         }
       }
     }
-    $.on(view, 'mousedown', function tap(e) {
+    $.on(view, "mousedown", function tap(e) {
       Hover.prevent = !(pressed = true);
       unset();
       clearInterval(ticker);
@@ -883,7 +817,7 @@ Hover = {
       timestamp = Date.now();
       ticker = setInterval(track, 100 / 3);
     }, passive);
-    $.on(d.body, 'mousemove', function drag(e) {
+    $.on(d.body, "mousemove", function drag(e) {
       if (pressed) {
         const x = e.clientX, delta = reference - x;
         if (delta > 1 || delta < -1) {
@@ -893,7 +827,7 @@ Hover = {
         }
       }
     }, passive);
-    $.on(d.body, 'mouseup', function release() {
+    $.on(d.body, "mouseup", function release() {
       pressed = false;
       clearInterval(ticker);
       if (velocity > 10 || velocity < -10) {
@@ -906,7 +840,7 @@ Hover = {
     }, passive);
   },
   cancel() {
-    $.safe(cancelAnimationFrame, $.u, Hover.kinetID);
+    $.safe(cancelAnimationFrame, null, Hover.kinetID);
   }
 };
 
@@ -945,7 +879,7 @@ Main = {
         {
           const arr = style.childNodes;
           let i = arr.length;
-          while(~--i) $.rm(arr[i]);
+          while (~--i) $.rm(arr[i]);
         }
         style.appendChild(moreCss);
         return style.textContent;
@@ -966,7 +900,7 @@ Main = {
       $.r(() => {
         const start = $(".thumb").parentNode;
         let el, i = 10;
-        while(i) {
+        while (i) {
           if ((el = start.nextSibling) && el.id !== "paginator") $.rm(el);
           else --i;
         }
@@ -1001,7 +935,7 @@ Main = {
   click(e) {
     if (e.button === 0) {
       let target = e.target;
-      while(target && !target.hasAttribute("data-full")) target = target.parentNode;
+      while (target && !target.hasAttribute("data-full")) target = target.parentNode;
       e.preventDefault();
       e.stopPropagation();
       if (target) Main.fn(target);
@@ -1019,7 +953,7 @@ Main = {
       id = (node.id || a.id || a.children[0].id).match(Main.r[4])[0];
       switch(site.name) {
        case "gelbooru":
-        a.setAttribute("href", "/index.php?page=post&s=view&id=" + id);
+        a.setAttribute("href", `/index.php?page=post&s=view&id=${id}`);
         break;
        case "booru":
        case "splatoon":
@@ -1058,17 +992,18 @@ Main = {
       childList: true,
       subtree: true
     });
-    if (site.sankakucomplex)
-      $.on(w, "message", Sank.listener);
     $.on("animationend", Main.animationEnd);
     $.on(w, "keypress", e => {
-      if (e.key === "Enter" || e.keyCode === 13) {
+      if (e.keyCode === 13) {
         if (slideshow)
           Btn.cb();
         else if (e.target.matches(".thumb > a[data-full]")) {
           e.preventDefault();
           Main.fn(e.target);
         }
+      }
+      else if (slideshow && e.charCode === 32) {
+        Btn.cb.move();
       }
     });
     $.on(w, "wheel", e => {
@@ -1109,8 +1044,8 @@ Main = {
           }
         }
       }
-      img.setAttribute("src", img.getAttribute("data-" + key));
-      img.removeAttribute("data-" + key);
+      img.setAttribute("src", img.getAttribute(`data-${key}`));
+      img.removeAttribute(`data-${key}`);
     }
     const span = el.firstElementChild;
     el.parentNode.replaceChild(span, el);
@@ -1119,7 +1054,7 @@ Main = {
   myImuotoOnReady(root) {
     const arr = root.childNodes;
     let i = arr.length;
-    while(~--i) {
+    while (~--i) {
       const child = arr[i];
       if (child.nodeType !== 1) root.removeChild(child);
     }
@@ -1131,15 +1066,15 @@ Main = {
       Main.myImuoto.readied = true;
     }
     thumb.id = el.id;
-    thumb.className = "creator-id-" + id + " thumb";
-    thumb.innerHTML = `<a id="${"s" + id}" href="/post/show/${id}" data-res="${el.lastElementChild.lastElementChild.textContent.replace(Main.r[6], "\u00A0")}"><img class="preview" src="${img.src}" alt="${img.alt}" title="${img.alt}" /></a>`;
+    thumb.className = `creator-id-${id} thumb`;
+    thumb.innerHTML = `<a id="s${id}" href="/post/show/${id}" data-res="${el.lastElementChild.lastElementChild.textContent.replace(Main.r[6], "\u00A0")}"><img class="preview" src="${img.src}" alt="${img.alt}" title="${img.alt}" /></a>`;
     el.parentNode.replaceChild(thumb, el);
     return Main.process(thumb, fullImage || full.match(Main.r[2])[1].toLowerCase() === "gif" ? full : null);
   },
   fn(node) {
     const [msg, method] = Main.el ? Main.offObj : Main.onObj;
     d.dispatchEvent(new CustomEvent(ns, msg));
-    const _ = $.safe(method, $.u, node);
+    const _ = $.safe(method, null, node);
     if (_ === $.safe.error)
       console.error(_);
   },
@@ -1183,13 +1118,13 @@ Main = {
     {
       const arr = $$("a.outlined[data-full]");
       let i = arr.length;
-      while(~--i) arr[i].classList.remove("outlined");
+      while (~--i) arr[i].classList.remove("outlined");
     }
     $.add($.extend(Main.el = $.c("img"),
       { id: "slide", alt: "Loading...", onclick: Main.fn, onmouseup: Main._on }
     ));
     $.add(Main.gif = $.extend($.c("span"), { innerHTML: SVG.gif, className: "gif" }));
-    const _ = $.safe(Main.slide, $.u, $("img", a).src);
+    const _ = $.safe(Main.slide, null, $("img", a).src);
     if (_ === $.safe.error) {
       console.error(_);
       return Main.off();
@@ -1200,7 +1135,7 @@ Main = {
     Pos.fn(); Btn.fn(); $.preload();
   },
   isGif(match) {
-    return (match && match[1]) ? match[1].toLowerCase() === "gif" : null;
+    return match && match[1] ? match[1].toLowerCase() === "gif" : null;
   },
   slide(src) {
     if (!slideshow)
@@ -1216,9 +1151,15 @@ Main = {
     /* dirty hack ahead because GIF doesn't want to play as a blob and doesn't
      * give proper progress info for GM_xmlhttpRequest for whatever reason */
     const isGif = Main.isGif(data.match(Main.r[2]));
-    if (site.sankakucomplex)
-      return Sank.fn(id, curr);
     if (data === "loading") Main.req(curr);
+    else if (curr.dataset.blob) {
+      Main.el.src = curr.dataset.blob;
+      if (Menu.el) Menu.download();
+      if (Prog.el) Prog.el = $.rm(Prog.el);
+      const el = Prog.progress();
+      el.style.width = "100%";
+      el.classList.add("progdone");
+    }
     // hack start
     else if (isGif !== false) {
       if (isGif) {
@@ -1229,14 +1170,6 @@ Main = {
       else Main.el.dispatchEvent(new Event("load"));
     }
     // hack end
-    else if (curr.dataset.blob) {
-      Main.el.src = curr.dataset.blob;
-      if (Menu.el) Menu.download();
-      if (Prog.el) Prog.el = $.rm(Prog.el);
-      let el = Prog.progress();
-      el.style.width = "100%";
-      el.classList.add("progdone");
-    }
     else Prog.fn(data, id);
   },
   r: [/file_url[=>]"?([^" <]+)"?/i,/* 0 */ /sample_url[=>]"?([^" <]+)"?/i,/* 1 */ /\.(gif|png|jpe?g)/i,/* 2 */ /\b(webm|video|mp4|flash)\b/i,/* 3 */ /\d+/,/* 4 */ /[a-f0-9]{32}/,/* 5 */ / /g]/* 6 */,
@@ -1248,12 +1181,12 @@ Main = {
     return ~Main.el.dataset.src.indexOf($.base(img));
   },
   processText(img, node, id) {
-    if ((img = $.safe(Main.validateHtml, $.u, img, node)) === $.safe.error)
+    if ((img = $.safe(Main.validateHtml, null, img, node)) === $.safe.error)
       throw "API error";
     node.dataset.full = $.cache(id, img);
-    const _ = $.safe(Main.checkPreviewId, $.u, img);
+    const _ = $.safe(Main.checkPreviewId, null, img);
     if (typeof _ === "number" && _)
-      $.safe(Main.slide, $.u, img);
+      $.safe(Main.slide, null, img);
     $("img", node).style.outline = "";
     node.removeAttribute("data-already-loading");
   },
@@ -1261,6 +1194,8 @@ Main = {
     switch(domain) {
      case "e621.net":
       return [node.parentNode.id.substr(1), "/post/show.xml?id="];
+     case "sankakucomplex.com":
+      return [node.dataset.id, "/post/show/"];
      case "yande.re":
      case "lolibooru.moe":
      case "konachan.com":
@@ -1279,17 +1214,18 @@ Main = {
     if (!node) return;
     const { dataset } = node;
     if (dataset.alreadyLoading || dataset.full !== "loading") return;
-    const apiIfno = Main.getApiInfo(node);
-    const id = apiIfno[0], api = apiIfno[1];
-    node.dataset.alreadyLoading = "true";
+    const { 0: id, 1: api } = Main.getApiInfo(node);
+    dataset.alreadyLoading = "true";
     try {
-      const request = await fetch(api + id, { credentials: "include" });
+      if (site.sankakucomplex) return await Prog.fn(api + id, id, node);
+      const request = await fetch(api + id);
       const text = await Main.processHttp(request);
       Main.processText(text, node, id);
-    } catch(err) {
+    }
+    catch (e) {
       Main.warn();
       $("img", node).style.outline = "6px solid red";
-      console.error(`Main.req failure:\n\n${err} | ${location.origin + api + id}`);
+      console.error(`Main.req failure:\n\n${location.origin + api + id} |`, e);
       node.removeAttribute("data-already-loading");
     }
   },
@@ -1302,7 +1238,7 @@ Main = {
       Main.el.dispatchEvent(new Event("load"));
   },
   front() {
-    let target, method = "beforeend";
+    let target, method = "beforeend", el;
     switch(domain) {
      case "e621.net":
       target = "#mascot_artist";
@@ -1331,9 +1267,8 @@ Main = {
       target = "form:last-of-type + div";
       break;
     }
-    for (let i = 0, arr = ["#tags", "#tags-search"]; i < 2; ++i) {
-      const el = $(arr[i]);
-      if (el) {
+    for (let i = 0, arr = ["tags", "tags-search"]; i < 2; ++i) {
+      if (el = $.id(arr[i])) {
         el.focus();
         break;
       }
